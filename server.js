@@ -7,15 +7,32 @@ const { google } = require('googleapis');
 const app = express();
 app.use(cors());
 
-// 1. Cấu hình thông số kết nối (Dùng path.join để tránh lỗi ENOENT đường dẫn file)
-const KEY_FILE_PATH = path.join(__dirname, 'service-account.json');
+// Phục vụ các file tĩnh (như index.html, css, js) ngay tại thư mục gốc
+app.use(express.static(__dirname));
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// 1. Cấu hình đọc credentials an toàn (Ưu tiên đọc từ Render Env, nếu không có mới tìm file local)
+let credentials;
+try {
+  if (process.env.GOOGLE_CREDENTIALS_JSON) {
+    credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
+  } else {
+    credentials = require('./service-account.json');
+  }
+} catch (err) {
+  console.error('Không thể tải Google Credentials:', err.message);
+}
+
 const GA4_PROPERTY_ID = '549439570'; 
 const GSC_SITE_URL = 'https://daotaoseo.viocompany.com/'; 
 
-// Khởi tạo Client xác thực Google
-const analyticsDataClient = new BetaAnalyticsDataClient({ keyFilename: KEY_FILE_PATH });
+// Khởi tạo Client xác thực Google bằng biến credentials
+const analyticsDataClient = new BetaAnalyticsDataClient({ credentials });
 const auth = new google.auth.GoogleAuth({
-  keyFile: KEY_FILE_PATH,
+  credentials,
   scopes: ['https://www.googleapis.com/auth/webmasters.readonly'],
 });
 const searchconsole = google.searchconsole({ version: 'v1', auth });
@@ -117,7 +134,8 @@ app.get('/api/live-traffic-report', async (req, res) => {
   }
 });
 
-const PORT = 3000;
+// LƯU Ý QUAN TRỌNG: Nhận cổng kết nối động do Render cấp phát (tránh lỗi 502 Bad Gateway)
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server Backend đang chạy tại: http://localhost:${PORT}`);
+  console.log(`Server Backend đang chạy tại cổng: ${PORT}`);
 });
