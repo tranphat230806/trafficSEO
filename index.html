@@ -210,7 +210,7 @@
 
     async function fetchRealData() {
       try {
-        const response = await fetch('http://localhost:3000/api/live-traffic-report');
+        const response = await fetch('https://trafficseo.onrender.com/api/live-traffic-report');
         const result = await response.json();
 
         if (result.success) {
