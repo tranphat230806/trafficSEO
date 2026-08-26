@@ -1,5 +1,5 @@
 // Configure backend URL (can be changed based on environment)
-const API_BASE = 'https://trafficseo-1.onrender.com/api/live-traffic-report';
+const API_BASE = 'https://trafficseo-1.onrender.com/api';
 
 /**
  * Helper to show/hide loading overlay
