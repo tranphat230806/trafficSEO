@@ -1,0 +1,109 @@
+:root {
+  --bg-color: #0b0f16;
+  --panel-bg: #121923;
+  --panel-border: #263244;
+  --text-primary: #f5f7fb;
+  --text-secondary: #8795aa;
+  --text-tertiary: #637188;
+  --accent-blue: #3f6df6;
+  --accent-blue-hover: #315be0;
+  --accent-green: #37d58a;
+  --accent-red: #ff5e67;
+  
+  --sidebar-width: 260px;
+  --header-height: 70px;
+  
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-family);
+  background: var(--bg-color);
+  color: var(--text-primary);
+  min-height: 100vh;
+  display: flex;
+  overflow: hidden; /* App container handles scroll */
+}
+
+/* Base text */
+h1, h2, h3 {
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+/* App Container */
+#app {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+}
+
+/* Main Content Area */
+#main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  position: relative;
+}
+
+/* App Content Area */
+#app-content {
+  padding: 30px;
+  flex: 1;
+  max-width: 1250px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* Loading overlay */
+.loading-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(11, 15, 22, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.loading-overlay.active {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--panel-border);
+  border-top-color: var(--accent-blue);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Animations */
+.fade-in {
+  animation: fadeIn 0.4s ease forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
