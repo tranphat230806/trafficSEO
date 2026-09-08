@@ -1,9 +1,14 @@
 {
+  "scripts": {
+    "start": "node server.js"
+  },
   "dependencies": {
     "@google-analytics/data": "^7.0.0",
     "@google-cloud/local-auth": "^3.0.1",
     "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "fast-xml-parser": "^5.11.1",
     "googleapis": "^174.0.1"
   }
 }

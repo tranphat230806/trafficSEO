@@ -1,8 +1,11 @@
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { BetaAnalyticsDataClient } = require('@google-analytics/data');
 const { google } = require('googleapis');
+const { fetchSpinEditorRankings } = require('./spineditor');
 
 const app = express();
 app.use(cors());
@@ -184,34 +187,18 @@ app.get('/api/seo-performance', async (req, res) => {
   }
 });
 
-// 5. Endpoint Keywords (GSC)
-app.get('/api/keywords', async (req, res) => {
+// 5. Endpoint Keyword Rankings (SpinEditor)
+app.get(['/api/spineditor/rankings', '/api/keywords'], async (req, res) => {
   try {
-    const endDate = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const startDate = new Date(Date.now() - 32 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-
-    const gscResponse = await searchconsole.searchanalytics.query({
-      siteUrl: GSC_SITE_URL,
-      requestBody: {
-        startDate: startDate,
-        endDate: endDate,
-        dimensions: ['query'],
-        rowLimit: 50
-      },
-    });
-
-    const data = (gscResponse.data.rows || []).map(row => ({
-      query: row.keys[0],
-      clicks: row.clicks,
-      impressions: row.impressions,
-      ctr: row.ctr,
-      position: row.position
-    }));
-
+    const data = await fetchSpinEditorRankings();
     res.json({ success: true, data });
   } catch (error) {
-    console.error('Lỗi API Keywords:', error.message);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Lỗi API SpinEditor:', error.message);
+    res.status(error.status || 502).json({
+      success: false,
+      error: error.code || 'upstream_error',
+      message: error.message
+    });
   }
 });
 

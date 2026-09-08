@@ -16,6 +16,25 @@
   font-size: 14px;
 }
 
+.refresh-button {
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-bg);
+  color: var(--text-primary);
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.refresh-button:hover:not(:disabled) {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.refresh-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
 /* KPI Grid */
 .kpi-grid {
   display: grid;
@@ -139,6 +158,39 @@
 .data-table td {
   font-size: 14px;
   color: var(--text-primary);
+}
+
+.keyword-cell {
+  color: var(--accent-blue) !important;
+  font-weight: 600;
+  min-width: 220px;
+}
+
+.position-cell,
+.change-cell {
+  white-space: nowrap;
+  text-align: center !important;
+}
+
+.url-cell {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.url-cell a {
+  color: var(--text-secondary);
+}
+
+.text-muted {
+  color: var(--text-tertiary);
+}
+
+.keyword-sync-status {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-bottom: 14px;
 }
 
 /* Utilities */

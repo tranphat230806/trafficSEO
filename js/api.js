@@ -1,5 +1,5 @@
-// Configure backend URL (can be changed based on environment)
-const API_BASE = 'https://trafficseo-1.onrender.com/api';
+// Use the local server by default; deployments can override this before loading the app.
+const API_BASE = globalThis.__API_BASE__ || '/api';
 
 /**
  * Helper to show/hide loading overlay
@@ -27,7 +27,7 @@ async function fetchAPI(endpoint) {
     }
     const data = await response.json();
     if (!data.success) {
-      throw new Error(data.error || 'Unknown API error');
+      throw new Error(data.message || data.error || 'Unknown API error');
     }
     return data.data;
   } catch (error) {
@@ -49,6 +49,6 @@ export const api = {
   // Existing endpoints
   getTrafficTrend: () => fetchAPI('/traffic-trend'),
   getSEOPerformance: () => fetchAPI('/seo-performance'),
-  getKeywords: () => fetchAPI('/keywords'),
+  getKeywords: () => fetchAPI('/spineditor/rankings'),
   getLandingPages: () => fetchAPI('/landing-pages')
 };
