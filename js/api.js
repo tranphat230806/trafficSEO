@@ -1,5 +1,5 @@
 // Use the local server by default; deployments can override this before loading the app.
-const API_BASE = globalThis.__API_BASE__ || '/api';
+const API_BASE ='https://trafficseo-1.onrender.com/api';  
 
 /**
  * Helper to show/hide loading overlay

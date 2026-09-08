@@ -1,223 +1,120 @@
-const { XMLParser } = require('fast-xml-parser');
+const axios = require('axios');
+const xml2js = require('xml2js');
 
-const SPINEDITOR_URL = 'https://spineditor.com/Code/Web/WebService.asmx/DoAction';
-
-class SpinEditorError extends Error {
-  constructor(code, message, status = 502) {
-    super(message);
-    this.code = code;
-    this.status = status;
+/**
+ * Bỏ ký tự escape ^ của cURL Windows
+ */
+function cleanCurlBody(rawBody) {
+  if (!rawBody) return '';
+  let cleaned = rawBody.trim();
+  if ((cleaned.startsWith('"') && cleaned.endsWith('"')) || 
+      (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+    cleaned = cleaned.slice(1, -1);
   }
+  return cleaned.replace(/\^/g, '');
 }
 
-const parser = new XMLParser({
-  ignoreAttributes: false,
-  removeNSPrefix: true,
-  parseTagValue: false
-});
-
-function normalizePosition(value) {
-  const position = Number(value);
-  return Number.isFinite(position) && position > 0 ? position : null;
-}
-
-function normalizeKeyword(keyword) {
-  const currentPosition = normalizePosition(keyword.Position);
-  const oldPosition = normalizePosition(keyword.PositionOld);
-
-  return {
-    id: keyword.Id ?? null,
-    keyword: keyword.Keyword ?? '',
-    position: currentPosition,
-    position_best: normalizePosition(keyword.PositionBest),
-    position_old: oldPosition,
-    position_change: currentPosition !== null && oldPosition !== null
-      ? oldPosition - currentPosition
-      : null,
-    url: keyword.LinkDisplay ?? null,
-    domain: keyword.GetLinkDomain ?? null,
-    date_update: keyword.DateUpdate ?? null
-  };
-}
-
+/**
+ * Tìm mảng JSON chứa Keyword từ hàm CheckListKeyword(...)
+ */
 function findJsonArray(content) {
-  const functionStart = content.search(/CheckListKeyword\s*\(/i);
-  if (functionStart < 0) return null;
-
-  const arrayStart = content.indexOf('[', functionStart);
-  if (arrayStart < 0) return null;
-
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-
-  for (let index = arrayStart; index < content.length; index += 1) {
-    const character = content[index];
-
-    if (inString) {
-      if (escaped) escaped = false;
-      else if (character === '\\') escaped = true;
-      else if (character === '"') inString = false;
-      continue;
-    }
-
-    if (character === '"') inString = true;
-    else if (character === '[') depth += 1;
-    else if (character === ']') {
-      depth -= 1;
-      if (depth === 0) return content.slice(arrayStart, index + 1);
+  if (!content) return null;
+  const match = content.match(/CheckListKeyword\s*\(\s*\d+\s*,\s*['"][^'"]*['"]\s*,\s*(\[\s*\{[\s\S]*?\}\s*\])/);
+  if (match && match[1]) {
+    try {
+      return JSON.parse(match[1]);
+    } catch (e) {
+      console.error('Lỗi parse JSON array từ CheckListKeyword:', e.message);
     }
   }
-
   return null;
 }
 
-function extractSearchEngine(content) {
-  const match = content.match(/CheckListKeyword\s*\(\s*[^,]+,\s*"((?:\\.|[^"\\])*)"/i);
-  if (!match) return null;
+/**
+ * Parse XML response từ SpinEditor
+ */
+async function parseSpinEditorResponse(xmlRaw) {
+  const parser = new xml2js.Parser({ explicitArray: false });
+  const parsedXml = await parser.parseStringPromise(xmlRaw);
+  const stringContent = parsedXml.string?._ || parsedXml.string;
 
-  try {
-    return JSON.parse(`"${match[1]}"`);
-  } catch {
-    return match[1];
-  }
-}
-
-function parseSpinEditorResponse(xml) {
-  let envelope;
-  try {
-    envelope = parser.parse(xml);
-  } catch {
-    throw new SpinEditorError('invalid_xml', 'SpinEditor trả về XML không hợp lệ.');
+  if (!stringContent) {
+    throw new Error('Response XML không chứa thẻ <string>');
   }
 
-  const rawString = envelope?.string;
-  if (typeof rawString !== 'string') {
-    throw new SpinEditorError('invalid_xml', 'Không tìm thấy nội dung string trong XML.');
+  const jsonResponse = JSON.parse(stringContent);
+  if (!jsonResponse.Success) {
+    throw new Error(jsonResponse.Message || 'SpinEditor trả về Success = false');
   }
 
-  let response;
-  try {
-    response = JSON.parse(rawString);
-  } catch {
-    throw new SpinEditorError('invalid_response_json', 'Nội dung string của SpinEditor không phải JSON hợp lệ.');
+  const rawKeywords = findJsonArray(jsonResponse.Content || '');
+  if (!rawKeywords || !Array.isArray(rawKeywords)) {
+    return { search_engine: 'https://www.google.com.vn', total: 0, keywords: [] };
   }
 
-  if (response.Success !== true) {
-    throw new SpinEditorError(
-      'authentication/session_expired',
-      'SpinEditor từ chối request. Hãy dùng lại toàn bộ cookie trong -b (bao gồm DateCreate) và lấy lại payload DoAction trong cùng phiên.'
-    );
-  }
-
-  const content = response.Content;
-  const arrayText = typeof content === 'string' ? findJsonArray(content) : null;
-  if (!arrayText) {
-    throw new SpinEditorError('unexpected_response_format', 'Không tìm thấy CheckListKeyword trong response SpinEditor.');
-  }
-
-  let keywords;
-  try {
-    keywords = JSON.parse(arrayText);
-  } catch {
-    throw new SpinEditorError('unexpected_response_format', 'Danh sách keyword trong CheckListKeyword không hợp lệ.');
-  }
-
-  if (!Array.isArray(keywords)) {
-    throw new SpinEditorError('unexpected_response_format', 'Danh sách keyword không phải một mảng.');
-  }
+  const keywords = rawKeywords.map(item => ({
+    id: String(item.Id || ''),
+    keyword: item.Keyword || '',
+    position: typeof item.Position === 'number' ? item.Position : null,
+    position_best: typeof item.PositionBest === 'number' ? item.PositionBest : null,
+    position_old: typeof item.PositionOld === 'number' ? item.PositionOld : null,
+    position_change: (typeof item.PositionOld === 'number' && typeof item.Position === 'number') 
+      ? item.PositionOld - item.Position 
+      : 0,
+    url: item.LinkDisplay || '',
+    domain: item.GetLinkDomain || '',
+    date_update: item.DateUpdate || new Date().toISOString()
+  }));
 
   return {
-    search_engine: extractSearchEngine(content),
-    keywords: keywords.map(normalizeKeyword)
+    search_engine: 'https://www.google.com.vn',
+    total: keywords.length,
+    keywords
   };
 }
 
-function getSpinEditorPayload() {
-  if (!process.env.SPINEDITOR_PAYLOAD_JSON) {
-    return { m: 'SearchKeyword' };
-  }
-
-  try {
-    const payload = JSON.parse(process.env.SPINEDITOR_PAYLOAD_JSON);
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error();
-    return payload;
-  } catch {
-    throw new SpinEditorError(
-      'configuration_error',
-      'SPINEDITOR_PAYLOAD_JSON phải là một JSON object hợp lệ trên một giá trị cấu hình. Không dán dạng danh sách key/value từ DevTools.',
-      500
-    );
-  }
-}
-
-function encodeFormPayload(payload) {
-  return Object.entries(payload).reduce((form, [key, value]) => {
-    form.append(key, value !== null && typeof value === 'object'
-      ? JSON.stringify(value)
-      : String(value ?? ''));
-    return form;
-  }, new URLSearchParams());
-}
-
-function getSpinEditorBody() {
-  if (process.env.SPINEDITOR_FORM_BODY) {
-    // Copy as cURL from Windows cmd escapes form-body characters with ^.
-    let body = process.env.SPINEDITOR_FORM_BODY.trim();
-    if (body.endsWith('^"')) body = body.slice(0, -2);
-    else if (body.endsWith('"')) body = body.slice(0, -1);
-    return body.replace(/\^/g, '');
-  }
-
-  return encodeFormPayload(getSpinEditorPayload()).toString();
-}
-
+/**
+ * Hàm gọi API lấy Thứ Hạng Keywords thật từ SpinEditor
+ */
 async function fetchSpinEditorRankings() {
-  if (!process.env.SPINEDITOR_COOKIE) {
-    throw new SpinEditorError('configuration_error', 'Chưa cấu hình SPINEDITOR_COOKIE.', 500);
+  const cookie = process.env.SPINEDITOR_COOKIE;
+  const rawBody = process.env.SPINEDITOR_FORM_BODY;
+
+  if (!cookie) {
+    throw new Error('CHƯA CẤU HÌNH SPINEDITOR_COOKIE TRONG .ENV');
+  }
+  if (!rawBody) {
+    throw new Error('CHƯA CẤU HÌNH SPINEDITOR_FORM_BODY TRONG .ENV');
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20_000);
+  const body = cleanCurlBody(rawBody);
 
   try {
-    const response = await fetch(SPINEDITOR_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        Accept: 'application/xml, text/xml, */*',
-        Origin: 'https://spineditor.com',
-        Referer: 'https://spineditor.com/kiem-tra-thu-hang-tu-khoa',
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1',
-        'X-Requested-With': 'XMLHttpRequest',
-        Cookie: process.env.SPINEDITOR_COOKIE
-      },
-      body: getSpinEditorBody(),
-      signal: controller.signal
-    });
+    const response = await axios.post(
+      'https://spineditor.com/Code/Web/WebService.asmx/DoAction',
+      body,
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'Cookie': cookie,
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+          'X-Requested-With': 'XMLHttpRequest',
+          'Origin': 'https://spineditor.com',
+          'Referer': 'https://spineditor.com/danh-sach-tu-khoa.html'
+        },
+        timeout: 30000
+      }
+    );
 
-    if (response.status === 401 || response.status === 403) {
-      throw new SpinEditorError('authentication/session_expired', 'Phiên SpinEditor đã hết hạn hoặc không hợp lệ.', 502);
+    return await parseSpinEditorResponse(response.data);
+  } catch (err) {
+    if (err.response) {
+      console.error('SpinEditor HTTP Error Status:', err.response.status);
     }
-
-    if (!response.ok) {
-      throw new SpinEditorError('upstream_error', `SpinEditor trả về HTTP ${response.status}.`, 502);
-    }
-
-    return parseSpinEditorResponse(await response.text());
-  } catch (error) {
-    if (error instanceof SpinEditorError) throw error;
-    if (error.name === 'AbortError') {
-      throw new SpinEditorError('upstream_timeout', 'SpinEditor không phản hồi trong thời gian cho phép.', 504);
-    }
-    throw new SpinEditorError('upstream_error', 'Không thể kết nối tới SpinEditor.', 502);
-  } finally {
-    clearTimeout(timeout);
+    throw err;
   }
 }
 
 module.exports = {
-  fetchSpinEditorRankings,
-  parseSpinEditorResponse,
-  normalizePosition
+  fetchSpinEditorRankings
 };

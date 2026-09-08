@@ -8,6 +8,8 @@ const { google } = require('googleapis');
 const { fetchSpinEditorRankings } = require('./spineditor');
 
 const app = express();
+const axios = require('axios');
+const xml2js = require('xml2js');
 app.use(cors());
 
 // Phục vụ các file tĩnh (như index.html, css, js) ngay tại thư mục gốc
